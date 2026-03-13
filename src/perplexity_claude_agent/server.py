@@ -26,6 +26,56 @@ logger = logging.getLogger(__name__)
 AUTH_TOKEN_ENV = "PERPLEXITY_AGENT_TOKEN"
 
 
+class CORSMiddleware:
+    """ASGI middleware for CORS support."""
+
+    def __init__(self, app: Any) -> None:
+        self.app = app
+
+    async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        # Handle preflight OPTIONS requests
+        method = scope.get("method", "")
+        if method == "OPTIONS":
+            await self._send_preflight_response(send)
+            return
+
+        # For regular requests, wrap send to add CORS headers
+        async def send_with_cors(message: dict) -> None:
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                headers.extend([
+                    (b"access-control-allow-origin", b"*"),
+                    (b"access-control-allow-methods", b"GET, POST, OPTIONS"),
+                    (b"access-control-allow-headers", b"*"),
+                    (b"access-control-expose-headers", b"*"),
+                ])
+                message["headers"] = headers
+            await send(message)
+
+        await self.app(scope, receive, send_with_cors)
+
+    async def _send_preflight_response(self, send: Any) -> None:
+        """Send CORS preflight response."""
+        await send({
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [
+                (b"access-control-allow-origin", b"*"),
+                (b"access-control-allow-methods", b"GET, POST, OPTIONS"),
+                (b"access-control-allow-headers", b"*"),
+                (b"access-control-max-age", b"86400"),
+            ],
+        })
+        await send({
+            "type": "http.response.body",
+            "body": b"",
+        })
+
+
 class BearerAuthMiddleware:
     """ASGI middleware for bearer token authentication."""
 
@@ -377,6 +427,9 @@ async def run_server(
         # Wrap with auth middleware if token is provided
         if token:
             app = BearerAuthMiddleware(app, token)
+
+        # Always wrap with CORS middleware (outermost layer)
+        app = CORSMiddleware(app)
 
         config = uvicorn.Config(
             app,
