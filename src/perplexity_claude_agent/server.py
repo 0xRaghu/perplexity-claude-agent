@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 from .permissions import DEFAULT_PERMISSION
 from .registry import ProjectRegistry
@@ -148,6 +149,10 @@ def create_server(
     mcp = FastMCP(
         name="perplexity-claude-agent",
         stateless_http=False,  # We need stateful sessions
+        # Disable DNS rebinding protection to allow tunnel access
+        transport_security=TransportSecuritySettings(
+            enable_dns_rebinding_protection=False,
+        ),
     )
 
     @mcp.tool()
