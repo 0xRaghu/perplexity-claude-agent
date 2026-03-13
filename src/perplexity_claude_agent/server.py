@@ -60,10 +60,29 @@ class CORSMiddleware:
             await self.app(scope, receive, send)
             return
 
-        # Handle preflight OPTIONS requests
+        # Debug: Log all incoming requests (print to stderr for visibility)
+        import sys
         method = scope.get("method", "")
+        path = scope.get("path", "")
+        headers = {k.decode(): v.decode() for k, v in scope.get("headers", [])}
+        print(f"[REQUEST] {method} {path}", file=sys.stderr, flush=True)
+        print(f"[HEADERS] {headers}", file=sys.stderr, flush=True)
+        logger.info(f"[DEBUG] Incoming request: {method} {path}")
+        logger.info(f"[DEBUG] Headers: {headers}")
+
+        # Handle preflight OPTIONS requests
         if method == "OPTIONS":
             await self._send_preflight_response(send)
+            return
+
+        # Handle GET /mcp for server discovery
+        if method == "GET" and path == "/mcp":
+            await self._send_discovery_response(send)
+            return
+
+        # Handle GET / for health check (no auth required)
+        if method == "GET" and path == "/":
+            await self._send_health_response(send)
             return
 
         # For regular requests, wrap send to add CORS headers
@@ -98,6 +117,65 @@ class CORSMiddleware:
             "body": b"",
         })
 
+    async def _send_discovery_response(self, send: Any) -> None:
+        """Send MCP server discovery response for GET /mcp."""
+        import sys
+        print("[DISCOVERY] GET /mcp - returning server info", file=sys.stderr, flush=True)
+
+        discovery_info = json.dumps({
+            "name": "perplexity-claude-agent",
+            "version": "0.1.0",
+            "protocol": "mcp",
+            "capabilities": {
+                "tools": True,
+                "resources": False,
+                "prompts": False,
+            },
+            "endpoints": {
+                "mcp": "/mcp",
+            },
+        }).encode()
+
+        await send({
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"access-control-allow-origin", b"*"),
+                (b"access-control-allow-methods", b"GET, POST, OPTIONS"),
+                (b"access-control-allow-headers", b"*"),
+            ],
+        })
+        await send({
+            "type": "http.response.body",
+            "body": discovery_info,
+        })
+
+    async def _send_health_response(self, send: Any) -> None:
+        """Send health check response for GET /."""
+        import sys
+        print("[HEALTH] GET / - server is healthy", file=sys.stderr, flush=True)
+
+        health_info = json.dumps({
+            "status": "healthy",
+            "service": "perplexity-claude-agent",
+            "version": "0.1.0",
+            "mcp_endpoint": "/mcp",
+        }).encode()
+
+        await send({
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"access-control-allow-origin", b"*"),
+            ],
+        })
+        await send({
+            "type": "http.response.body",
+            "body": health_info,
+        })
+
 
 class BearerAuthMiddleware:
     """ASGI middleware for bearer token authentication.
@@ -112,27 +190,40 @@ class BearerAuthMiddleware:
         self.token = token
 
     async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
+        import sys
+
         if scope["type"] == "http":
             # Extract headers
             headers = dict(scope.get("headers", []))
+            path = scope.get("path", "")
 
             # Check Authorization: Bearer header
             auth = headers.get(b"authorization", b"").decode()
             if auth == f"Bearer {self.token}":
+                print(f"[AUTH] ✓ Valid Bearer token for {path}", file=sys.stderr, flush=True)
                 await self.app(scope, receive, send)
                 return
 
             # Check x-api-key header (used by some clients like Perplexity)
             api_key = headers.get(b"x-api-key", b"").decode()
             if api_key == self.token:
+                print(f"[AUTH] ✓ Valid x-api-key for {path}", file=sys.stderr, flush=True)
                 await self.app(scope, receive, send)
                 return
+
+            # Log auth failure
+            print(f"[AUTH] ✗ UNAUTHORIZED for {path}", file=sys.stderr, flush=True)
+            print(f"[AUTH]   Authorization header: {auth[:20]}..." if auth else "[AUTH]   No Authorization header", file=sys.stderr, flush=True)
+            print(f"[AUTH]   x-api-key header: {api_key[:20]}..." if api_key else "[AUTH]   No x-api-key header", file=sys.stderr, flush=True)
 
             # Return 401 Unauthorized
             await send({
                 "type": "http.response.start",
                 "status": 401,
-                "headers": [[b"content-type", b"text/plain"]],
+                "headers": [
+                    [b"content-type", b"text/plain"],
+                    [b"access-control-allow-origin", b"*"],
+                ],
             })
             await send({
                 "type": "http.response.body",
