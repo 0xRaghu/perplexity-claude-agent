@@ -152,3 +152,6 @@ Thumbs.db
 # Project specific
 .perplexity-claude-agent/
 *.local.json
+
+# Project files
+.omc/
