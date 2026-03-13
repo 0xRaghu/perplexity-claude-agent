@@ -301,14 +301,73 @@ def setup() -> None:
 
 
 @main.command("show-skill")
-def show_skill() -> None:
+@click.option("--copy", "-c", is_flag=True, help="Copy to clipboard (macOS)")
+@click.option("--save", "-s", type=click.Path(), help="Save to file")
+def show_skill(copy: bool, save: str | None) -> None:
     """Display the Perplexity Computer custom skill template."""
-    click.echo(
-        click.style(
-            "Skill template coming in next update. Use 'perplexity-claude-agent setup' for configuration.",
-            fg="yellow",
-        )
-    )
+    from .skill_template import generate_skill
+
+    # Get projects for customization
+    registry = get_registry()
+    projects = registry.list_projects()
+
+    project_dicts = [
+        {
+            "name": p.name,
+            "description": p.description or "No description",
+            "tech_stack": p.tech_stack,
+        }
+        for p in projects
+    ] if projects else None
+
+    # Generate skill
+    skill = generate_skill(projects=project_dicts)
+
+    # Header
+    header = """# Perplexity Computer Custom Skill Template
+# Copy everything below this line and paste into Perplexity Computer's custom skills
+# ─────────────────────────────────────────────
+"""
+
+    full_output = header + "\n" + skill
+
+    # Handle --save
+    if save:
+        try:
+            with open(save, "w", encoding="utf-8") as f:
+                f.write(full_output)
+            click.echo(click.style(f"Saved to: {save}", fg="green"))
+            return
+        except Exception as e:
+            click.echo(click.style(f"Error saving file: {e}", fg="red"), err=True)
+            sys.exit(1)
+
+    # Handle --copy
+    if copy:
+        try:
+            subprocess.run(
+                ["pbcopy"],
+                input=full_output.encode("utf-8"),
+                check=True,
+            )
+            click.echo(click.style("Copied to clipboard!", fg="green"))
+            click.echo()
+            click.echo(f"Skill generated with {len(projects) if projects else 0} registered projects.")
+            click.echo("Paste it into Perplexity Computer's custom skills section.")
+            return
+        except FileNotFoundError:
+            click.echo(
+                click.style("Warning: pbcopy not found (macOS only). Printing instead.", fg="yellow"),
+                err=True,
+            )
+        except subprocess.CalledProcessError as e:
+            click.echo(
+                click.style(f"Warning: Failed to copy to clipboard: {e}", fg="yellow"),
+                err=True,
+            )
+
+    # Print to stdout
+    click.echo(full_output)
 
 
 if __name__ == "__main__":

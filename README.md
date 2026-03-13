@@ -90,10 +90,50 @@ When Perplexity Computer calls your agent:
 
 ## Custom Skill
 
-A Perplexity Computer skill template is included that teaches the orchestrator:
-- When to delegate to your local Claude Code (filesystem ops, git, tests)
-- How to format requests for best results
-- What capabilities are available
+The magic of this package is the **custom skill template** — a prompt that teaches Perplexity Computer's orchestrator when and how to use your local Claude Code agent.
+
+### Why You Need the Skill
+
+Without the skill, Perplexity Computer doesn't know:
+- That it has access to your local machine
+- When to use your local Claude Code vs the cloud coding agent
+- How to properly manage sessions and projects
+
+With the skill, Perplexity Computer becomes a true development partner that can:
+- Read and modify files in your actual projects
+- Run your test suites, builds, and linters
+- Maintain conversation context across complex multi-step tasks
+- Work with your real git repos, not sandboxed copies
+
+### Generate Your Skill
+
+```bash
+# Print to terminal
+perplexity-claude-agent show-skill
+
+# Copy to clipboard (macOS)
+perplexity-claude-agent show-skill --copy
+
+# Save to file
+perplexity-claude-agent show-skill --save my-skill.md
+```
+
+The generated skill includes your registered projects for better context.
+
+### Or Copy from GitHub
+
+You can also copy the base skill template directly from:
+[skills/perplexity_computer_skill.md](skills/perplexity_computer_skill.md)
+
+### Where to Paste
+
+1. Open Perplexity Computer
+2. Go to Settings → Custom Skills (or similar)
+3. Create a new skill
+4. Paste the entire template
+5. Save
+
+Now when you ask Perplexity Computer to work on "your project" or "your code", it will automatically delegate to your local Claude Code agent.
 
 ## Contributing
 
