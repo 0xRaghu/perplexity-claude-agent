@@ -393,3 +393,33 @@ async def run_server(
         logger.info("Shutting down, closing all sessions...")
         await session_manager.close_all()
         logger.info("Server shutdown complete")
+
+
+async def run_stdio_server(
+    registry: ProjectRegistry,
+    permission_preset: str = "safe",
+) -> None:
+    """Run the MCP server over stdio (for desktop apps).
+
+    Args:
+        registry: The project registry to use.
+        permission_preset: Permission preset name.
+    """
+    # Create session manager
+    session_manager = SessionManager(
+        registry=registry,
+        permission_preset=permission_preset,
+    )
+
+    # Create server
+    mcp = create_server(registry, session_manager)
+
+    try:
+        # Start the session reaper
+        await session_manager.start_reaper()
+
+        # Run in stdio mode
+        await mcp.run_stdio_async()
+    finally:
+        # Clean up all sessions on shutdown
+        await session_manager.close_all()

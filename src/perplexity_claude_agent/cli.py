@@ -155,6 +155,37 @@ def start(host: str, port: int, permission: str, token: str | None) -> None:
         click.echo(click.style("Server stopped.", fg="yellow"))
 
 
+@main.command()
+@click.option(
+    "--permission",
+    default="safe",
+    type=click.Choice(["safe", "default", "plan", "full"]),
+    help="Permission preset for Claude Code (safe=auto-accept edits)",
+)
+def stdio(permission: str) -> None:
+    """Run MCP server over stdio (for desktop apps like Perplexity Desktop)."""
+    from .server import run_stdio_server
+
+    # Configure minimal logging to stderr
+    logging.basicConfig(
+        level=logging.WARNING,
+        format="%(levelname)s: %(message)s",
+        stream=sys.stderr,
+    )
+
+    registry = get_registry()
+
+    try:
+        asyncio.run(
+            run_stdio_server(
+                registry=registry,
+                permission_preset=permission,
+            )
+        )
+    except KeyboardInterrupt:
+        pass
+
+
 @main.command("add-project")
 @click.argument("path")
 @click.option("--name", "-n", default=None, help="Project name (defaults to directory name)")
