@@ -100,7 +100,12 @@ class CORSMiddleware:
 
 
 class BearerAuthMiddleware:
-    """ASGI middleware for bearer token authentication."""
+    """ASGI middleware for bearer token authentication.
+
+    Supports both:
+    - Authorization: Bearer <token>
+    - x-api-key: <token>
+    """
 
     def __init__(self, app: Any, token: str) -> None:
         self.app = app
@@ -108,22 +113,32 @@ class BearerAuthMiddleware:
 
     async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
         if scope["type"] == "http":
-            # Extract authorization header
+            # Extract headers
             headers = dict(scope.get("headers", []))
-            auth = headers.get(b"authorization", b"").decode()
 
-            if auth != f"Bearer {self.token}":
-                # Return 401 Unauthorized
-                await send({
-                    "type": "http.response.start",
-                    "status": 401,
-                    "headers": [[b"content-type", b"text/plain"]],
-                })
-                await send({
-                    "type": "http.response.body",
-                    "body": b"Unauthorized",
-                })
+            # Check Authorization: Bearer header
+            auth = headers.get(b"authorization", b"").decode()
+            if auth == f"Bearer {self.token}":
+                await self.app(scope, receive, send)
                 return
+
+            # Check x-api-key header (used by some clients like Perplexity)
+            api_key = headers.get(b"x-api-key", b"").decode()
+            if api_key == self.token:
+                await self.app(scope, receive, send)
+                return
+
+            # Return 401 Unauthorized
+            await send({
+                "type": "http.response.start",
+                "status": 401,
+                "headers": [[b"content-type", b"text/plain"]],
+            })
+            await send({
+                "type": "http.response.body",
+                "body": b"Unauthorized",
+            })
+            return
 
         await self.app(scope, receive, send)
 
