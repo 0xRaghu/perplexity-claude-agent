@@ -1,10 +1,10 @@
 # perplexity-claude-agent
 
-> The 21st agent for Perplexity Computer — your local Claude Code with full filesystem access
+> Give Perplexity Computer local superpowers — your local Claude Code with full filesystem access
 
 ## What is this?
 
-Perplexity Computer orchestrates 19 AI models in a cloud sandbox, but it can't touch your local machine. This package exposes your local Claude Code instance as an MCP connector that Perplexity Computer can call, giving it a **21st agent** with access to your local filesystem, git repos, test suites, and development environment.
+Perplexity Computer orchestrates AI models in a cloud sandbox, but it can't touch your local machine. This package exposes your local Claude Code instance as an MCP connector that Perplexity Computer can call, giving it **local superpowers** — access to your local filesystem, git repos, test suites, and development environment.
 
 It ships with a custom Perplexity skill template that teaches the orchestrator when and how to use your local Claude Code.
 

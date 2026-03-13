@@ -33,7 +33,7 @@ def print_banner(host: str, port: int, permission: str, project_count: int) -> N
     lines = [
         "┌─────────────────────────────────────────────────┐",
         "│  perplexity-claude-agent v{:<21} │".format(__version__),
-        "│  The 21st agent for Perplexity Computer        │",
+        "│  Local superpowers for Perplexity Computer     │",
         "├─────────────────────────────────────────────────┤",
         "│  Server: http://{}:{:<23} │".format(host, port),
         "│  MCP Endpoint: http://{}:{}/mcp{} │".format(
@@ -54,7 +54,7 @@ def print_banner(host: str, port: int, permission: str, project_count: int) -> N
 @click.group()
 @click.version_option(version=__version__, prog_name="perplexity-claude-agent")
 def main():
-    """The 21st agent for Perplexity Computer — your local Claude Code with full filesystem access."""
+    """Give Perplexity Computer local superpowers — your local Claude Code with full filesystem access."""
     pass
 
 

@@ -1,3 +1,3 @@
-"""perplexity-claude-agent: The 21st agent for Perplexity Computer."""
+"""perplexity-claude-agent: Give Perplexity Computer local superpowers."""
 
 __version__ = "0.1.0"

@@ -3,7 +3,7 @@
 SKILL_TEMPLATE = '''
 # Local Claude Code Agent
 
-You have access to a local Claude Code instance running on the user's machine via the "perplexity-claude-agent" MCP connector. This gives you a 21st agent — a persistent, stateful Claude Code subprocess with full access to the user's local development environment.
+You have access to a local Claude Code instance running on the user's machine via the "perplexity-claude-agent" MCP connector. This gives you local superpowers — a persistent, stateful Claude Code subprocess with full access to the user's local development environment.
 
 ## When to Use the Local Claude Code Agent
 

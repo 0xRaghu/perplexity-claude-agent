@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "perplexity-claude-agent"
 version = "0.1.0"
-description = "Give Perplexity Computer a 21st agent — your local Claude Code with full filesystem access"
+description = "Give Perplexity Computer local superpowers — your local Claude Code with full filesystem access"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
