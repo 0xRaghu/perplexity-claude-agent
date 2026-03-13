@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Any
 
@@ -20,6 +21,38 @@ from .registry import ProjectRegistry
 from .session import SessionManager
 
 logger = logging.getLogger(__name__)
+
+# Environment variable for bearer token authentication
+AUTH_TOKEN_ENV = "PERPLEXITY_AGENT_TOKEN"
+
+
+class BearerAuthMiddleware:
+    """ASGI middleware for bearer token authentication."""
+
+    def __init__(self, app: Any, token: str) -> None:
+        self.app = app
+        self.token = token
+
+    async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
+        if scope["type"] == "http":
+            # Extract authorization header
+            headers = dict(scope.get("headers", []))
+            auth = headers.get(b"authorization", b"").decode()
+
+            if auth != f"Bearer {self.token}":
+                # Return 401 Unauthorized
+                await send({
+                    "type": "http.response.start",
+                    "status": 401,
+                    "headers": [[b"content-type", b"text/plain"]],
+                })
+                await send({
+                    "type": "http.response.body",
+                    "body": b"Unauthorized",
+                })
+                return
+
+        await self.app(scope, receive, send)
 
 
 def _json_response(data: Any) -> str:
@@ -265,9 +298,7 @@ def create_server(
                 "suggestion": "Use list_projects to see available projects.",
             })
         except asyncio.TimeoutError:
-            # Try to close the session if it was opened
-            if session_id:
-                await session_manager.close_session(session_id)
+            # Session already closed by query() on timeout
             return _json_response({
                 "error": "Query timed out",
                 "suggestion": "The request took too long. Try breaking it into smaller tasks.",
@@ -285,11 +316,17 @@ def create_server(
     return mcp
 
 
+def get_auth_token() -> str | None:
+    """Get the authentication token from environment."""
+    return os.environ.get(AUTH_TOKEN_ENV)
+
+
 async def run_server(
     host: str = "0.0.0.0",
     port: int = 8765,
     registry: ProjectRegistry | None = None,
     permission_preset: str = DEFAULT_PERMISSION,
+    auth_token: str | None = None,
 ) -> None:
     """Start the MCP server.
 
@@ -298,6 +335,8 @@ async def run_server(
         port: Port to listen on (default: 8765).
         registry: Optional ProjectRegistry. Creates one if not provided.
         permission_preset: Permission preset for Claude Code sessions.
+        auth_token: Optional bearer token for authentication. If not provided,
+            checks PERPLEXITY_AGENT_TOKEN env var.
     """
     # Create registry if not provided
     if registry is None:
@@ -312,17 +351,50 @@ async def run_server(
     # Create server
     mcp = create_server(registry, session_manager)
 
+    # Check for auth token
+    token = auth_token or get_auth_token()
+    if token:
+        logger.info("Bearer token authentication enabled")
+    else:
+        logger.warning(
+            f"WARNING: No {AUTH_TOKEN_ENV} set. Server is accessible without "
+            f"authentication. Set {AUTH_TOKEN_ENV} env var for security."
+        )
+
     logger.info(f"Starting MCP server on {host}:{port}")
     logger.info(f"Permission preset: {permission_preset}")
     logger.info(f"Registered projects: {len(registry.list_projects())}")
 
     try:
-        # Run the server with Streamable HTTP transport
-        await mcp.run_async(
-            transport="streamable-http",
-            host=host,
-            port=port,
-        )
+        # Start the session reaper
+        await session_manager.start_reaper()
+
+        # Get the ASGI app from FastMCP
+        # Note: We need to access the underlying app to wrap with middleware
+        # FastMCP's run_async handles this internally, so we use uvicorn directly
+        # when auth is needed
+        if token:
+            import uvicorn
+
+            # Create the ASGI app with auth middleware
+            app = mcp.get_app()
+            authed_app = BearerAuthMiddleware(app, token)
+
+            config = uvicorn.Config(
+                authed_app,
+                host=host,
+                port=port,
+                log_level="info",
+            )
+            server = uvicorn.Server(config)
+            await server.serve()
+        else:
+            # Run without auth middleware
+            await mcp.run_async(
+                transport="streamable-http",
+                host=host,
+                port=port,
+            )
     finally:
         # Clean up all sessions on shutdown
         logger.info("Shutting down, closing all sessions...")

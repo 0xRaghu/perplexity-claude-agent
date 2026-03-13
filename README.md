@@ -56,6 +56,41 @@ It ships with a custom Perplexity skill template that teaches the orchestrator w
 - Claude Code CLI installed and authenticated
 - ngrok or cloudflared for tunnel (optional for local testing)
 
+## Security
+
+This server exposes Claude Code to the network. **Always configure authentication when using a public tunnel.**
+
+### Bearer Token Authentication
+
+Set the `PERPLEXITY_AGENT_TOKEN` environment variable before starting:
+
+```bash
+export PERPLEXITY_AGENT_TOKEN="your-secret-token-here"
+perplexity-claude-agent start
+```
+
+Or use the `--token` flag:
+
+```bash
+perplexity-claude-agent start --token "your-secret-token-here"
+```
+
+When configured, all requests must include `Authorization: Bearer <token>` header.
+
+### Permission Presets
+
+Control what Claude Code can do with `--permission`:
+
+| Preset | Description |
+|--------|-------------|
+| `default` | Claude asks before destructive operations (recommended) |
+| `plan` | Plan-only mode — proposes changes but doesn't execute |
+| `full` | Skip all permission prompts (use with caution over tunnels) |
+
+### Session Auto-Cleanup
+
+Idle sessions are automatically closed after 10 minutes to prevent zombie processes from accumulating. This protects against resource exhaustion from abandoned sessions.
+
 ## Quick Start
 
 ```bash

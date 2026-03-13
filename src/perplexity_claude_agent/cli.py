@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import subprocess
 import sys
 
@@ -21,6 +22,7 @@ import click
 from . import __version__
 from .permissions import PERMISSION_PRESETS
 from .registry import ProjectRegistry
+from .server import AUTH_TOKEN_ENV
 
 
 def get_registry() -> ProjectRegistry:
@@ -28,23 +30,39 @@ def get_registry() -> ProjectRegistry:
     return ProjectRegistry()
 
 
-def print_banner(host: str, port: int, permission: str, project_count: int) -> None:
+def print_banner(
+    host: str,
+    port: int,
+    permission: str,
+    project_count: int,
+    auth_enabled: bool,
+) -> None:
     """Print the startup banner."""
+    # Fixed width for content area (excluding borders)
+    width = 50
+
+    # Build content lines
+    version_line = f"perplexity-claude-agent v{__version__}"
+    tagline = "Local superpowers for Perplexity Computer"
+    server_line = f"Server: http://{host}:{port}"
+    mcp_line = f"MCP Endpoint: http://{host}:{port}/mcp"
+    permission_line = f"Permission: {permission}"
+    projects_line = f"Projects: {project_count} registered"
+    auth_line = "Auth: Bearer token" if auth_enabled else "Auth: None (set PERPLEXITY_AGENT_TOKEN)"
+
     lines = [
-        "┌─────────────────────────────────────────────────┐",
-        "│  perplexity-claude-agent v{:<21} │".format(__version__),
-        "│  Local superpowers for Perplexity Computer     │",
-        "├─────────────────────────────────────────────────┤",
-        "│  Server: http://{}:{:<23} │".format(host, port),
-        "│  MCP Endpoint: http://{}:{}/mcp{} │".format(
-            host, port, " " * (14 - len(str(port)))
-        ),
-        "│  Permission: {:<33} │".format(permission),
-        "│  Projects: {} registered{} │".format(
-            project_count, " " * (24 - len(str(project_count)))
-        ),
-        "└─────────────────────────────────────────────────┘",
+        ("┌" + "─" * width + "┐"),
+        f"│  {version_line:<{width - 4}}  │",
+        f"│  {tagline:<{width - 4}}  │",
+        ("├" + "─" * width + "┤"),
+        f"│  {server_line:<{width - 4}}  │",
+        f"│  {mcp_line:<{width - 4}}  │",
+        f"│  {permission_line:<{width - 4}}  │",
+        f"│  {projects_line:<{width - 4}}  │",
+        f"│  {auth_line:<{width - 4}}  │",
+        ("└" + "─" * width + "┘"),
     ]
+
     click.echo()
     for line in lines:
         click.echo(click.style(line, fg="cyan"))
@@ -67,9 +85,21 @@ def main():
     type=click.Choice(["default", "plan", "full"]),
     help="Permission preset for Claude Code",
 )
-def start(host: str, port: int, permission: str) -> None:
+@click.option(
+    "--token",
+    default=None,
+    help=f"Bearer token for authentication (or set {AUTH_TOKEN_ENV} env var)",
+)
+def start(host: str, port: int, permission: str, token: str | None) -> None:
     """Start the MCP server for Perplexity Computer."""
     from .server import run_server
+
+    # Set token in environment if provided via CLI
+    if token:
+        os.environ[AUTH_TOKEN_ENV] = token
+
+    # Check if auth is enabled
+    auth_enabled = bool(token or os.environ.get(AUTH_TOKEN_ENV))
 
     # Configure logging
     logging.basicConfig(
@@ -83,7 +113,7 @@ def start(host: str, port: int, permission: str) -> None:
     project_count = len(registry.list_projects())
 
     # Print banner
-    print_banner(host, port, permission, project_count)
+    print_banner(host, port, permission, project_count, auth_enabled)
 
     # Print instructions
     click.echo(
@@ -91,6 +121,21 @@ def start(host: str, port: int, permission: str) -> None:
     )
     click.echo("  1. Expose this server via tunnel (ngrok, cloudflared)")
     click.echo("  2. Add the HTTPS URL as a custom connector in Perplexity Computer")
+    if not auth_enabled:
+        click.echo()
+        click.echo(
+            click.style(
+                "  Security Warning: No authentication configured!",
+                fg="red",
+                bold=True,
+            )
+        )
+        click.echo(
+            click.style(
+                f"  Set {AUTH_TOKEN_ENV} or use --token for security.",
+                fg="red",
+            )
+        )
     click.echo()
     click.echo(click.style("Press Ctrl+C to stop the server.", fg="bright_black"))
     click.echo()
@@ -102,6 +147,7 @@ def start(host: str, port: int, permission: str) -> None:
                 port=port,
                 registry=registry,
                 permission_preset=permission,
+                auth_token=token,
             )
         )
     except KeyboardInterrupt:
@@ -280,6 +326,14 @@ def setup() -> None:
         for p in projects:
             click.echo(f"  - {p.name}: {p.path}")
 
+    click.echo()
+
+    # Security reminder
+    click.echo(click.style("Security:", fg="cyan", bold=True))
+    click.echo()
+    click.echo(f"  Set {AUTH_TOKEN_ENV} environment variable for authentication.")
+    click.echo("  Example:")
+    click.echo(click.style(f"    export {AUTH_TOKEN_ENV}=your-secret-token", fg="bright_white"))
     click.echo()
 
     # Next steps

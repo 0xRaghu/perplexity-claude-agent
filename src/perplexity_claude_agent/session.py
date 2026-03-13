@@ -58,6 +58,7 @@ class SessionManager:
         registry: ProjectRegistry,
         permission_preset: str = DEFAULT_PERMISSION,
         default_timeout: float = 300.0,
+        idle_ttl: float = 600.0,
     ) -> None:
         """Initialize the session manager.
 
@@ -65,12 +66,66 @@ class SessionManager:
             registry: The project registry for looking up project paths.
             permission_preset: Permission preset name ("default", "plan", "full").
             default_timeout: Default timeout in seconds for queries (default: 300).
+            idle_ttl: Time in seconds before idle sessions are reaped (default: 600).
         """
         self._registry = registry
         self._sessions: dict[str, SessionInfo] = {}
         self._clients: dict[str, "ClaudeSDKClient"] = {}
         self._permission_mode = get_permission_mode(permission_preset)
         self._default_timeout = default_timeout
+        self._idle_ttl = idle_ttl
+        self._reaper_task: asyncio.Task | None = None
+
+    async def start_reaper(self) -> None:
+        """Start the background session reaper task.
+
+        The reaper runs every 60 seconds and closes sessions that have been
+        idle longer than idle_ttl.
+        """
+        if self._reaper_task is not None:
+            return  # Already running
+
+        async def _reaper_loop() -> None:
+            while True:
+                try:
+                    await asyncio.sleep(60)  # Check every 60 seconds
+                    await self._reap_idle_sessions()
+                except asyncio.CancelledError:
+                    break
+                except Exception as e:
+                    logger.error(f"Reaper error: {e}")
+
+        self._reaper_task = asyncio.create_task(_reaper_loop())
+        logger.info(f"Session reaper started (idle TTL: {self._idle_ttl}s)")
+
+    async def stop_reaper(self) -> None:
+        """Stop the background session reaper task."""
+        if self._reaper_task is not None:
+            self._reaper_task.cancel()
+            try:
+                await self._reaper_task
+            except asyncio.CancelledError:
+                pass
+            self._reaper_task = None
+            logger.info("Session reaper stopped")
+
+    async def _reap_idle_sessions(self) -> None:
+        """Close sessions that have been idle longer than idle_ttl."""
+        now = datetime.now(timezone.utc)
+        sessions_to_reap: list[tuple[str, str, float]] = []
+
+        for session_id, session in list(self._sessions.items()):
+            idle_seconds = (now - session.last_activity).total_seconds()
+            if idle_seconds > self._idle_ttl:
+                sessions_to_reap.append((session_id, session.project_name, idle_seconds))
+
+        for session_id, project_name, idle_seconds in sessions_to_reap:
+            idle_minutes = idle_seconds / 60
+            logger.info(
+                f"Reaped idle session {session_id} for project {project_name} "
+                f"(idle for {idle_minutes:.1f}m)"
+            )
+            await self.close_session(session_id)
 
     async def create_session(
         self,
@@ -209,11 +264,19 @@ class SessionManager:
 
         except asyncio.TimeoutError:
             logger.warning(f"Session {session_id} query timed out after {query_timeout}s")
-            session.is_active = False
+            # Clean up the zombie session
+            try:
+                await self.close_session(session_id)
+            except Exception as close_err:
+                logger.warning(f"Failed to close timed-out session {session_id}: {close_err}")
             raise
         except Exception as e:
             logger.error(f"Session {session_id} query failed: {e}")
-            session.is_active = False
+            # Clean up the zombie session
+            try:
+                await self.close_session(session_id)
+            except Exception as close_err:
+                logger.warning(f"Failed to close failed session {session_id}: {close_err}")
             raise
 
         # Update session info
@@ -284,6 +347,9 @@ class SessionManager:
         Used during server shutdown to cleanly terminate all Claude Code
         subprocesses.
         """
+        # Stop reaper first
+        await self.stop_reaper()
+
         session_ids = list(self._sessions.keys())
         for session_id in session_ids:
             await self.close_session(session_id)
