@@ -369,32 +369,23 @@ async def run_server(
         # Start the session reaper
         await session_manager.start_reaper()
 
-        # Get the ASGI app from FastMCP
-        # Note: We need to access the underlying app to wrap with middleware
-        # FastMCP's run_async handles this internally, so we use uvicorn directly
-        # when auth is needed
+        import uvicorn
+
+        # Get the ASGI app from FastMCP for streamable HTTP transport
+        app = mcp.streamable_http_app()
+
+        # Wrap with auth middleware if token is provided
         if token:
-            import uvicorn
+            app = BearerAuthMiddleware(app, token)
 
-            # Create the ASGI app with auth middleware
-            app = mcp.get_app()
-            authed_app = BearerAuthMiddleware(app, token)
-
-            config = uvicorn.Config(
-                authed_app,
-                host=host,
-                port=port,
-                log_level="info",
-            )
-            server = uvicorn.Server(config)
-            await server.serve()
-        else:
-            # Run without auth middleware
-            await mcp.run_async(
-                transport="streamable-http",
-                host=host,
-                port=port,
-            )
+        config = uvicorn.Config(
+            app,
+            host=host,
+            port=port,
+            log_level="info",
+        )
+        server = uvicorn.Server(config)
+        await server.serve()
     finally:
         # Clean up all sessions on shutdown
         logger.info("Shutting down, closing all sessions...")
