@@ -22,6 +22,10 @@ PERMISSION_PRESETS: dict[str, PermissionPreset] = {
         "description": "Standard permissions — Claude asks before destructive operations",
         "permission_mode": "default",
     },
+    "safe": {
+        "description": "Auto-accept file edits, prompt for commands — recommended for tunnels",
+        "permission_mode": "acceptEdits",
+    },
     "plan": {
         "description": "Plan-only mode — Claude proposes changes but doesn't execute",
         "permission_mode": "plan",
@@ -32,7 +36,7 @@ PERMISSION_PRESETS: dict[str, PermissionPreset] = {
     },
 }
 
-DEFAULT_PERMISSION = "default"
+DEFAULT_PERMISSION = "safe"
 
 
 def get_permission_mode(preset: str = DEFAULT_PERMISSION) -> str:

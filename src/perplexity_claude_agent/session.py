@@ -19,7 +19,7 @@ from .permissions import DEFAULT_PERMISSION, get_permission_mode
 from .registry import ProjectRegistry
 
 if TYPE_CHECKING:
-    from claude_code_sdk import ClaudeSDKClient
+    from claude_code_sdk import ClaudeSDKClient, ClaudeSDKError, ProcessError
 
 logger = logging.getLogger(__name__)
 
@@ -167,10 +167,10 @@ class SessionManager:
             permission_mode=self._permission_mode,
         )
 
-        # Create client and enter async context
+        # Create client and connect
         client = ClaudeSDKClient(options=options)
         try:
-            await client.__aenter__()
+            await client.connect()
         except Exception as e:
             logger.error(f"Failed to start Claude Code session: {e}")
             raise RuntimeError(f"Failed to start Claude Code session: {e}") from e
@@ -303,7 +303,7 @@ class SessionManager:
         # Close the client
         if client is not None:
             try:
-                await client.__aexit__(None, None, None)
+                await client.disconnect()
             except Exception as e:
                 logger.warning(f"Error closing session {session_id}: {e}")
 

@@ -83,7 +83,8 @@ Control what Claude Code can do with `--permission`:
 
 | Preset | Description |
 |--------|-------------|
-| `default` | Claude asks before destructive operations (recommended) |
+| `safe` | Auto-accept file edits, prompt for commands (default, recommended for tunnels) |
+| `default` | Claude asks before all destructive operations |
 | `plan` | Plan-only mode — proposes changes but doesn't execute |
 | `full` | Skip all permission prompts (use with caution over tunnels) |
 

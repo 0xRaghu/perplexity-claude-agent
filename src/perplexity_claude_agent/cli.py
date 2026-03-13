@@ -81,9 +81,9 @@ def main():
 @click.option("--port", default=8765, type=int, help="Port to listen on")
 @click.option(
     "--permission",
-    default="default",
-    type=click.Choice(["default", "plan", "full"]),
-    help="Permission preset for Claude Code",
+    default="safe",
+    type=click.Choice(["safe", "default", "plan", "full"]),
+    help="Permission preset for Claude Code (safe=auto-accept edits)",
 )
 @click.option(
     "--token",

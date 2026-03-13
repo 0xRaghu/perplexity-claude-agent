@@ -45,5 +45,15 @@ Issues = "https://github.com/0xRaghu/perplexity-claude-agent/issues"
 [project.scripts]
 perplexity-claude-agent = "perplexity_claude_agent.cli:main"
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/perplexity_claude_agent"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
