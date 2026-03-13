@@ -26,6 +26,28 @@ logger = logging.getLogger(__name__)
 AUTH_TOKEN_ENV = "PERPLEXITY_AGENT_TOKEN"
 
 
+class HostRewriteMiddleware:
+    """ASGI middleware to rewrite Host header for reverse proxy support."""
+
+    def __init__(self, app: Any, target_host: str = "localhost") -> None:
+        self.app = app
+        self.target_host = target_host.encode()
+
+    async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
+        if scope["type"] == "http":
+            # Rewrite headers to use localhost as host
+            new_headers = []
+            for name, value in scope.get("headers", []):
+                if name == b"host":
+                    new_headers.append((name, self.target_host))
+                else:
+                    new_headers.append((name, value))
+            scope = dict(scope)
+            scope["headers"] = new_headers
+
+        await self.app(scope, receive, send)
+
+
 class CORSMiddleware:
     """ASGI middleware for CORS support."""
 
@@ -423,6 +445,9 @@ async def run_server(
 
         # Get the ASGI app from FastMCP for streamable HTTP transport
         app = mcp.streamable_http_app()
+
+        # Rewrite Host header for reverse proxy/tunnel support
+        app = HostRewriteMiddleware(app, f"{host}:{port}")
 
         # Wrap with auth middleware if token is provided
         if token:
