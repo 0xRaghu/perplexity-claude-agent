@@ -383,6 +383,8 @@ async def run_server(
             host=host,
             port=port,
             log_level="info",
+            proxy_headers=True,
+            forwarded_allow_ips="*",
         )
         server = uvicorn.Server(config)
         await server.serve()
