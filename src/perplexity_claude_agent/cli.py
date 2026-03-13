@@ -156,10 +156,7 @@ def start(host: str, port: int, permission: str, token: str | None) -> None:
 
 
 @main.command("add-project")
-@click.argument(
-    "path",
-    type=click.Path(exists=True, file_okay=False, resolve_path=True),
-)
+@click.argument("path")
 @click.option("--name", "-n", default=None, help="Project name (defaults to directory name)")
 @click.option("--description", "-d", default=None, help="Project description")
 @click.option("--default", "set_default", is_flag=True, help="Set as default project")
@@ -170,10 +167,13 @@ def add_project(
     set_default: bool,
 ) -> None:
     """Register a local project directory."""
+    # Expand ~ before validation (registry.add_project also expands, but we want clear errors)
+    expanded_path = os.path.expanduser(path)
+
     registry = get_registry()
 
     try:
-        project = registry.add_project(path, name=name, description=description)
+        project = registry.add_project(expanded_path, name=name, description=description)
     except ValueError as e:
         click.echo(click.style(f"Error: {e}", fg="red"), err=True)
         sys.exit(1)
@@ -312,12 +312,11 @@ def setup() -> None:
     if not projects:
         click.echo("No projects registered yet.")
         if click.confirm("Would you like to add a project now?"):
-            path = click.prompt(
-                "Enter the project path",
-                type=click.Path(exists=True, file_okay=False, resolve_path=True),
-            )
+            path = click.prompt("Enter the project path")
+            # Expand ~ before passing to registry
+            expanded_path = os.path.expanduser(path)
             try:
-                project = registry.add_project(path)
+                project = registry.add_project(expanded_path)
                 click.echo(click.style(f"Added project: {project.name}", fg="green"))
             except ValueError as e:
                 click.echo(click.style(f"Error: {e}", fg="red"))
