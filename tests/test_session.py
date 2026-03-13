@@ -10,6 +10,13 @@ from perplexity_claude_agent.registry import ProjectRegistry
 from perplexity_claude_agent.session import SessionInfo, SessionManager
 
 
+# NOTE: session.py imports AssistantMessage/ResultMessage/TextBlock inside query()
+# at call time via deferred imports. Our mocks work because mock_client yields
+# these mock types and tests validate final output strings, not type branching.
+# If those imports are ever moved to top-level in session.py, update test
+# patching to target perplexity_claude_agent.session.<ClassName> directly.
+
+
 # Mock SDK types
 class MockTextBlock:
     """Mock for TextBlock."""
